@@ -1,0 +1,22 @@
+---
+title: "Análisis de Localidades"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+```
+
+
+# Ubicación de Beneficiarios UKA
+```{r}
+
+sanfelipe <- read_csv('../data/San_Felipe_del_Progreso.csv') 
+sanfelipe %>% filter(`Niños UKA`>0) %>%
+  mutate(cve_locc = str_pad(Cve_Loc, 4, side = "left","0"),
+         cve_muni = str_c('15', str_pad(Cve_Mun, 3, side = "left","0")))
+         
+```
+
+
+
