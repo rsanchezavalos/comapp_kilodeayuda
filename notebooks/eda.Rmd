@@ -9,6 +9,7 @@ library(tidyverse)
 
 
 # Ubicación de Beneficiarios UKA
+
 ```{r}
 
 sanfelipe <- read_csv('../data/San_Felipe_del_Progreso.csv') 
@@ -18,5 +19,21 @@ sanfelipe %>% filter(`Niños UKA`>0) %>%
          
 ```
 
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
 
 
