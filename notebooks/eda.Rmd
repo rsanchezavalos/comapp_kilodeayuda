@@ -1,22 +1,71 @@
 ---
 title: "Análisis de Localidades"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
-```{r}
-library(tidyverse)
+```{r, echo=FALSE, include=FALSE}
+source("../utils.R")
 ```
 
 
+```{r, warning=FALSE}
 # Ubicación de Beneficiarios UKA
+sanfelipe <- read_csv('../data/San_Felipe_del_Progreso.csv') %>% 
+  mutate(Cve_Loc = str_pad(Cve_Loc, 4, side = "left","0"),
+         cve_muni = str_c('15', str_pad(Cve_Mun, 3, side = "left","0"))) %>%
+  filter(`Niños UKA`>0) %>%
+  mutate(cve_locc = str_c(cve_muni, Cve_Loc))
 
-```{r}
+# ITER
+iter <- readxl::read_xls('../data/RezagoSocial_2010.xls',
+                         skip = 6, col_names = FALSE) 
+colnames(iter) <- names_iter
+iter <- iter %>% select(-x_2, -x_) %>%
+  mutate(cve_locc = as.character(cve_locc),
+         cve_ent = str_extract(cve_locc, "^[0-9]{2}"),
+         cve_muni = str_extract(cve_locc,"^[0-9]{2}([0-9]{3})")) %>%
+  dplyr::filter(nom_ent == "MÉXICO")
 
-sanfelipe <- read_csv('../data/San_Felipe_del_Progreso.csv') 
-sanfelipe %>% filter(`Niños UKA`>0) %>%
-  mutate(cve_locc = str_pad(Cve_Loc, 4, side = "left","0"),
-         cve_muni = str_c('15', str_pad(Cve_Mun, 3, side = "left","0")))
-         
+data <- left_join(sanfelipe, iter, by=c('cve_locc', 'cve_muni'))
+
+# Asumiendo que nos quedamos con las comunidades con más niños UKA
+top_uka <- data %>% arrange(desc(`Niños UKA`)) %>% head(3)
+dt <- top_uka %>% select(Nom_Loc, cve_locc, Pob_Total, 
+                      `Niños UKA`, `Familias UKA`,
+                      indice_rezagosocial,
+                      grado_rezago_social)
+
+kable(dt) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+
+```{r, warning=FALSE}
+# Read the sahpefile
+manzanas <- st_read("../data/manzanas/mex_manzana.shp")
+# Obtenemos las manzanas en esa localidad
+manzanas_sub<-subset(manzanas, CVE_LOC %in% unique(top_uka$Cve_Loc) & 
+                       CVE_MUN == '074')
+
+
+plot(st_geometry(manzanas_sub), col=manzanas_sub$CVE_LOC, border=NA)
+
+ggplot() +
+  geom_point(aes(x = top_uka$Lon_Decimal, y = top_uka$Lat_Decimal, alpha = .5))
+
+
+leaflet(manzanas_sub) %>%
+  addPolygons(color = "#444444", weight = 1, smoothFactor = 0.5,
+    opacity = 1.0, fillOpacity = 0.5,
+    fillColor = ~colorFactor("OrRd", as.character(CVE_LOC))(CVE_LOC),
+    highlightOptions = highlightOptions(color = "white", weight = 2,
+                                        bringToFront = TRUE)) %>% addTiles() %>%
+  addCircleMarkers(lat=sanfelipe$Lat_Decimal, lng=sanfelipe$Lon_Decimal, color= "red")
+
+  
 ```
 
 
