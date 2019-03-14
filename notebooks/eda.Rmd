@@ -10,7 +10,7 @@ source("../utils.R")
 ```
 
 
-```{r, warning=FALSE}
+```{r message=FALSE, warning=FALSE}
 # Ubicación de Beneficiarios UKA
 sanfelipe <- read_csv('../data/San_Felipe_del_Progreso.csv') %>% 
   mutate(Cve_Loc = str_pad(Cve_Loc, 4, side = "left","0"),
@@ -69,20 +69,180 @@ leaflet(manzanas_sub) %>%
 ```
 
 
+### Estimación de media y varianza del ingreso para las localidades del Estado de México
 
+Las estimaciones del ingreso más recientes y más confiables se obtiene a partir de la Encuesta
+Nacional de Ingresos y Gastos en el Hogar (ENIGH) 2016. Esta encuesta tiene como objetivo 
+proporcionar un panorama estadístico del comportamiento de los ingresos y gastos de los hogares 
+en cuanto a su monto, procedencia y distribución; adicionalmente, ofrece información sobre 
+las características ocupacionales y sociodemográficas de los integrantes del hogar, así como 
+las características de la infraestructura de la vivienda y el equipamiento del hogar (INEGI 2016).
+
+Entre otras cosas la ENIGH permite estimar:
+
+* Ingreso corriente total (monetario y no monetario) de los hogares.
+
+* Gasto corriente monetario de los hogares.
+
+* Dimensiones de las carencias.
+
+El uso de la ENIGH es fundamental para dar respuesta a las incógnitas que nos planteamos con 
+respecto al ingreso de las personas en determinada área geográfica. Con la información recabada por 
+la ENIGH es posible obtener estimaciones de ingreso y carencias con representatividad nacional, en el
+caso de la ENIGH 2016 permite además representatividad por entidad federativa con estimaciones para 
+los dominios urbano y rural. Si bien el esfuerzo de muestreo de la ENIGH es de los mayores en México,
+cuando el objetivo es utilizar la información para obtener resultados cuya representatividad tenga
+un nivel menor, resulta que la representatividad del la ENIGH es muy gruesa.
+
+Para el análisis posterior utilizaremos una aproximación de la media y la varianza del ingreso
+utilizando los datos de las localidades del Estado de México.
+
+```{r message=FALSE, warning=FALSE}
+enigh_edomex <- read_csv("../data/enigh_2016_concentradohogar.csv") %>%
+  mutate(cve_edo = str_sub(ubica_geo, 1, 2),
+         cve_mun = str_sub(ubica_geo, 3, 5)) %>%
+  filter(cve_edo == "15") 
+```
+El ingreso medio y su varianza en el Estado de México es:
 
 ```{r}
+ing_edomex <- enigh_edomex %>%
+  summarise(media_ing = mean(ing_cor),
+            var_ing = var(ing_cor)) 
 
+ing_edomex
 ```
 
 
-```{r}
+# Descripción del modelo de muestreo propuesto
 
+Dado que la variable de interés resulta ser el ingreso en los hogares de las localidades, 
+proponemos que el esquema de muestra sea similar al de la ENIGH. Definimos los aspectos del diseño muestral.
+
+**Población objetivo.** La encuesta está dirigida a las viviendas de la o las localidades 
+seleccionadas.
+
+**Marco de la encuesta.** El diseño de la muestra será probabilístico, usaremos
+un diseño bietápico, estratificado y por conglomerados, donde la unidad última 
+de selección es la manzana y la unidad de observación es la vivienda.
+Para la selección de la muestra se utilizará el Inventario Nacional de 
+Viviendas (INV [^2]). 
+
+[^2]: Producto de INEGI.
+
+**UPM y USM.** Las Unidad Primaria de Muestreo (UPM) es la AGEB (rural o urbana 
+según el caso), la Unidad Secundaria de Muestreo (USM) se define como: localidad 
+para aquéllas menores a 2,500 habitantes, manzana para las localidades de 
+2,500 o más habitantes, las cabeceras municipales y las localidades amanzanadas 
+cercanas a las localidades de 5 mil y más habitantes. Dentro de las USMs se
+propone una desviación del muestreo probabilístico con el fin de reducir costos
+y buscando mayor calidad en los datos recolectados, en el caso de localidades o 
+AGEBs amanzanadas los encuestadores iniciarán en la esquina noreste de una 
+manzana e irán encuestando viviendas seleccionándolos en el sentido de las 
+manecillas del reloj hasta recorrer $n$ viviendas, en caso de no existir 
+manzanas se utilizarán los polígonos de la región, obtenidos del INV, para 
+definir un proceso similar. Este esquema pretende facilitar la creación de mapas 
+y la identificación de las viviendas que debe visitar el encuestador.
+
+
+**Estratificación.** Una vez construido el conjunto de UPMs, se estratifican.
+Esto se hará utilizando los datos disponibles en el INV y se definirá más 
+adelante.
+
+
+**Cuestionario.** Se aplicará el CUIS, el tiempo aproximado de aplicación del 
+cuestionario se calcula entre 30 y 50 minutos, esto con base a la 
+*Encuesta a Delegaciones Sobre los Costos del Levantamiento del Cuestionario
+Único de Información Socieconómica (CUIS)* que aplicó SEDESOL en 2016 a sus
+delegaciones en todos los estados. 
+
+**Selección de las UPM de la muestra.** Las UPM de la muestra se seleccionarán
+por medio de un muestreo con probabilidad proporcional al tamaño, esto es:
+
+$$P(U_{hi}\in S) = \frac{k_{h}m_{hi}}{m_{h}}$$
+
+donde,
+
+$U_{hi}$ indica la $i$-ésima UPM del h-ésimo estrato,  
+$S$ la muestra,
+$k_{h}$ el número de UPMs a seleccionar en el $h$-ésimo estrato,  
+$m_{hi}$ el número de viviendas en la i-ésima UPM, en el $h$-ésimo estrato, y
+$m_{h}$ el número de viviendas en el $h$-ésimo estrato.
+
+La selección de USMs será también por medio de un muestreo con probabilidad 
+proporcional al tamaño.
+
+**Tamaño de muestra.** El cálculo del tamaño de muestra se enfocará en la 
+variable ingreso corriente trimestral por vivienda. La fórmula que se utiliza es 
+la siguiente:
+
+$$n = \frac{z^2s^2Deff}{r^2 \bar{X^2}(1-tnr)}$$
+
+donde,
+
+* $n$ indica el tamaño de muestra,
+* $z_{\alpha_2}$ es el valor crítico de una distribución normal estándar, donde 
+$100\cdot(1-\alpha /2)$% es la confianza prefijada que se desea obtener,
+* $s^2$ indica la estimación de la varianza poblacional que se desea obtener,
+* $\bar{X}$ estimación de la media para la variable de interés,
+* $Deff$ es el efecto de diseño definido como el cociente de la varianza en la 
+estimación del diseño utilizado, entre la varianza obtenida considerando un 
+muestreo aleatorio simple para un mismo tamaño de muestra,
+* $r$ indica el error relativo máximo aceptable,
+* $tnr$ la tasa de no respuesta máxima aceptada.
+
+Los valores a utilizar cambian por municipio y se usará como referencia la 
+información de la ENIGH más actualizada, estos parámetros se afinarán también 
+con la información del muestreo rotativo conforme se analicen los primeros
+levantamientos, en este aspecto el muestreo piloto será la primera 
+realimentación.
+
+### INV
+En esta sección describimos el INV, esta es nuestra principal fuente de 
+información para la creación del marco muestral, lo utilizaremos para la 
+definición de UPMs, USMs, y usaremos los datos que integra para hacer la 
+estratificación. 
+
+El Inventario Nacional de Viviendas (INV) integra información estadística con
+una visión territorial, sobre la vivienda, población y entorno urbano. Considera 
+la construcción de indicadores que caractericen a la vivienda y a las personas 
+que la habitan, en diferentes desgloses geográficos: a nivel de localidad para
+aquéllas menores a 2,500 habitantes; y a nivel de manzana para las localidades 
+de 2,500 o más habitantes, las cabeceras municipales y las localidades 
+amanzanadas cercanas a las localidades de 5 mil y más habitantes.
+
+
+# Cálculo del tamaño de muestra
+
+
+Fijamos los valores de los componentes restantes como sigue:
+
+* nivel de confianza 90% por tanto $z_{\alpha/2}=1.645$, 
+* el efecto de diseño lo aproximamos en $Deff=4$, este valor es conservador y 
+usaremos el piloto para obtener una mejor aproximación.
+* el error relativo máximo aceptable lo fijamos en 15% (dos veces el de la
+ENIGH), 
+* para la tasa de no respuesta máxima esperada usaremos 20%, esto es 5
+puntos porcentuales más que la usada por ENIGH.
+
+Sustituimos estos valores junto con las aproximaciones de media y varianza 
+y calculamos el tamaño de muestra.
+
+```{r}
+sample_size <- function(x_bar, var, deff = 4, r = 0.15, tnr = 0.20, 
+    alpha = 0.1){
+    z <- qnorm(1 - alpha / 2)
+    (z ^ 2 * var * deff) / (r ^ 2 * x_bar ^ 2 * (1 - tnr))
+}
+
+sample_size(ing_edomex$media_ing, ing_edomex$var_ing)
 ```
 
 
-```{r}
+# Bibliografía
 
-```
+* INEGI 2016. _"Encuesta Nacional de Ingresos Y Gastos de Los Hogares (Enigh-2016). Diseño Muestral."_ http://www.beta.inegi.org.mx/app/biblioteca/ficha.html?upc=702825091972.
 
+* Lohr, S.L. 2009. _Sampling: Design and Analysis._ Advanced Cengage Learning. 
 
+* Lumley, Thomas. 2016. _"Survey: Analysis of Complex Survey Samples."_ Wiley.
